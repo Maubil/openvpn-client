@@ -85,6 +85,8 @@ vpnportforward() { local port="$1"
     echo "Setup forwarded port: $port"
 }
 
+vpn_config() { local conf="$1.ovpn" }
+
 ### usage: Help
 # Arguments:
 #   none)
@@ -113,9 +115,10 @@ dir="/vpn"
 route="$dir/.firewall"
 route6="$dir/.firewall6"
 
-while getopts ":hc:f:p:R:r:" opt; do
+while getopts ":hc:i:f:p:R:r:" opt; do
     case "$opt" in
         h) usage ;;
+        i) vpn_config "$OPTARG" ;;
         f) firewall "$OPTARG"; touch $route $route6 ;;
         p) vpnportforward "$OPTARG" ;;
         R) return_route6 "$OPTARG" ;;
