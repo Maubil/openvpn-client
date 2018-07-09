@@ -18,49 +18,18 @@
 
 set -o nounset                              # Treat unset variables as an error
 
-### cert_auth: setup auth passwd for accessing certificate
-# Arguments:
-#   passwd) Password to access the cert
-# Return: conf file that supports certificate authentication
-cert_auth() { local passwd="$1"
-    grep -q "^${passwd}\$" $auth || {
-        echo "$passwd" >$auth
-    }
-    chmod 0600 $auth
-    grep -q "^askpass ${auth}\$" $conf || {
-        sed -i '/askpass/d' $conf
-        echo "askpass $auth" >>$conf
-    }
-}
-
-### dns: setup openvpn client DNS
-# Arguments:
-#   none)
-# Return: conf file that uses VPN provider's DNS resolvers
-dns() {
-    sed -i '/resolv-*conf/d; /script-security/d' $conf
-    echo "# This updates the resolvconf with dns settings" >>$conf
-    echo "script-security 2" >>$conf
-    echo "up /etc/openvpn/up.sh" >>$conf
-    echo "down /etc/openvpn/down.sh" >>$conf
-}
-
 ### firewall: firewall all output not DNS/VPN that's not over the VPN connection
 # Arguments:
 #   none)
 # Return: configured firewall
-firewall() { local port="${1:-1194}" docker_network="$(ip -o addr show dev eth0|
-            awk '$3 == "inet" {print $4}')" network \
-            docker6_network="$(ip -o addr show dev eth0 |
+firewall() { local port="${1:-1194}" docker_network="$(ip -o addr show dev eth0 |
+            awk '$3 == "inet" {print $4}')" network docker6_network="$(ip -o addr show dev eth0 |
             awk '$3 == "inet6" {print $4; exit}')"
-    [[ -z "${1:-""}" && -r $conf ]] &&
-        port="$(awk '/^remote / && NF ~ /^[0-9]*$/ {print $NF}' $conf |
-                    grep ^ || echo 1194)"
+    [[ -z "${1:-""}" && -r $conf ]] && port="$(awk '/^remote / && NF ~ /^[0-9]*$/ {print $NF}' $conf | grep ^ || echo 1194)"
 
     ip6tables -F OUTPUT 2>/dev/null
     ip6tables -P OUTPUT DROP 2>/dev/null
-    ip6tables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT \
-                2>/dev/null
+    ip6tables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 2>/dev/null
     ip6tables -A OUTPUT -o lo -j ACCEPT 2>/dev/null
     ip6tables -A OUTPUT -o tap0 -j ACCEPT 2>/dev/null
     ip6tables -A OUTPUT -o tun0 -j ACCEPT 2>/dev/null
@@ -90,10 +59,8 @@ firewall() { local port="${1:-1194}" docker_network="$(ip -o addr show dev eth0|
 # Arguments:
 #   network) a CIDR specified network range
 # Return: configured return route
-return_route6() { local network="$1" gw="$(ip -6 route |
-                awk '/default/{print $3}')"
-    ip -6 route | grep -q "$network" ||
-        ip -6 route add to $network via $gw dev eth0
+return_route6() { local network="$1" gw="$(ip -6 route | awk '/default/{print $3}')"
+    ip -6 route | grep -q "$network" || ip -6 route add to $network via $gw dev eth0
     ip6tables -A OUTPUT --destination $network -j ACCEPT 2>/dev/null
     [[ -e $route6 ]] &&grep -q "^$network\$" $route6 ||echo "$network" >>$route6
 }
@@ -102,55 +69,10 @@ return_route6() { local network="$1" gw="$(ip -6 route |
 # Arguments:
 #   network) a CIDR specified network range
 # Return: configured return route
-return_route() { local network="$1" gw="$(ip route |awk '/default/ {print $3}')"
-    ip route | grep -q "$network" ||
-        ip route add to $network via $gw dev eth0
+return_route() { local network="$1" gw="$(ip route | awk '/default/ {print $3}')"
+    ip route | grep -q "$network" || ip route add to $network via $gw dev eth0
     iptables -A OUTPUT --destination $network -j ACCEPT
     [[ -e $route ]] && grep -q "^$network\$" $route || echo "$network" >>$route
-}
-
-### vpn: setup openvpn client
-# Arguments:
-#   server) VPN GW server
-#   user) user name on VPN
-#   pass) password on VPN
-#   port) port to connect to VPN (optional)
-# Return: configured .ovpn file
-vpn() { local server="$1" user="$2" pass="$3" port="${4:-1194}" i \
-            pem="$(\ls $dir/*.pem 2>&-)"
-
-    echo "client" >$conf
-    echo "dev tun" >>$conf
-    echo "proto udp" >>$conf
-    for i in $(sed 's/:/ /g' <<< $server); do
-        echo "remote $i $port" >>$conf
-    done
-    [[ $server =~ : ]] && echo "remote-random" >>$conf
-    echo "resolv-retry infinite" >>$conf
-    echo "keepalive 10 60" >>$conf
-    echo "nobind" >>$conf
-    echo "persist-key" >>$conf
-    echo "persist-tun" >>$conf
-    [[ "${CIPHER:-""}" ]] && echo "cipher $CIPHER" >>$conf
-    [[ "${AUTH:-""}" ]] && echo "auth $AUTH" >>$conf
-    echo "tls-client" >>$conf
-    echo "remote-cert-tls server" >>$conf
-    echo "auth-user-pass $auth" >>$conf
-    echo "comp-lzo" >>$conf
-    echo "verb 1" >>$conf
-    echo "reneg-sec 0" >>$conf
-    echo "redirect-gateway def1" >>$conf
-    echo "disable-occ" >>$conf
-    echo "fast-io" >>$conf
-    echo "ca $cert" >>$conf
-    [[ $(wc -w <<< $pem) -eq 1 ]] && echo "crl-verify $pem" >>$conf
-
-    echo "$user" >$auth
-    echo "$pass" >>$auth
-    chmod 0600 $auth
-
-    [[ "${FIREWALL:-""}" || -e $route6 || -e $route ]] &&
-        [[ "${4:-""}" ]] && firewall $port
 }
 
 ### vpnportforward: setup vpn port forwarding
@@ -158,10 +80,8 @@ vpn() { local server="$1" user="$2" pass="$3" port="${4:-1194}" i \
 #   port) forwarded port
 # Return: configured NAT rule
 vpnportforward() { local port="$1"
-    ip6tables -t nat -A OUTPUT -p tcp --dport $port -j DNAT \
-                --to-destination ::11:$port 2>/dev/null
-    iptables -t nat -A OUTPUT -p tcp --dport $port -j DNAT \
-                --to-destination 127.0.0.11:$port
+    ip6tables -t nat -A OUTPUT -p tcp --dport $port -j DNAT --to-destination ::11:$port 2>/dev/null
+    iptables  -t nat -A OUTPUT -p tcp --dport $port -j DNAT --to-destination 127.0.0.11:$port
     echo "Setup forwarded port: $port"
 }
 
@@ -173,10 +93,6 @@ usage() { local RC="${1:-0}"
     echo "Usage: ${0##*/} [-opt] [command]
 Options (fields in '[]' are optional, '<>' are required):
     -h          This help
-    -c '<passwd>' Configure an authentication password to open the cert
-                required arg: '<passwd>'
-                <passwd> password to access the certificate file
-    -d          Use the VPN provider's DNS resolvers
     -f '[port]' Firewall rules so that only the VPN and DNS are allowed to
                 send internet traffic (IE if VPN is down it's offline)
                 optional arg: [port] to use, instead of default
@@ -188,51 +104,33 @@ Options (fields in '[]' are optional, '<>' are required):
     -r '<network>' CIDR network (IE 192.168.1.0/24)
                 required arg: '<network>'
                 <network> add a route to (allows replies once the VPN is up)
-    -v '<server;user;password[;port]>' Configure OpenVPN
-                required arg: '<server>;<user>;<password>'
-                <server> to connect to (multiple servers are separated by :)
-                <user> to authenticate as
-                <password> to authenticate with
-                optional arg: [port] to use, instead of default
 
-The 'command' (if provided and valid) will be run instead of openvpn
-" >&2
+The 'command' (if provided and valid) will be run instead of openvpn" >&2
     exit $RC
 }
 
 dir="/vpn"
-auth="$dir/vpn.cert_auth"
-conf="$dir/vpn.conf"
-cert="$dir/vpn-ca.crt"
 route="$dir/.firewall"
 route6="$dir/.firewall6"
-[[ -f $conf ]] || { [[ $(ls $dir/*|egrep '\.(conf|ovpn)$' 2>&-|wc -w) -eq 1 ]]&&
-            conf="$(ls $dir/* | egrep '\.(conf|ovpn)$' 2>&-)"; }
-[[ -f $cert ]] || { [[ $(ls $dir/* | egrep '\.ce?rt$' 2>&- | wc -w) -eq 1 ]] &&
-            cert="$(ls $dir/* | egrep '\.ce?rt$' 2>&-)"; }
 
-while getopts ":hc:df:p:R:r:v:" opt; do
+while getopts ":hc:f:p:R:r:" opt; do
     case "$opt" in
         h) usage ;;
-        c) cert_auth "$OPTARG" ;;
-        d) DNS=true ;;
         f) firewall "$OPTARG"; touch $route $route6 ;;
         p) vpnportforward "$OPTARG" ;;
         R) return_route6 "$OPTARG" ;;
         r) return_route "$OPTARG" ;;
-        v) eval vpn $(sed 's/^/"/; s/$/"/; s/;/" "/g' <<< $OPTARG) ;;
         "?") echo "Unknown option: -$OPTARG"; usage 1 ;;
         ":") echo "No argument value for option: -$OPTARG"; usage 2 ;;
     esac
 done
 shift $(( OPTIND - 1 ))
 
-[[ "${CERT_AUTH:-""}" ]] && cert_auth "$CERT_AUTH"
+[[ "${FIREWALL:-""}" || -e $route6 || -e $route ]] && [[ "${4:-""}" ]] && firewall $port
 [[ "${FIREWALL:-""}" || -e $route ]] && firewall "${FIREWALL:-""}"
 [[ "${ROUTE6:-""}" ]] && return_route6 "$ROUTE6"
 [[ "${ROUTE:-""}" ]] && return_route "$ROUTE"
 [[ "${VPN:-""}" ]] && eval vpn $(sed 's/^/"/; s/$/"/; s/;/" "/g' <<< $VPN)
-[[ "${DNS:-""}" ]] && dns
 [[ "${VPNPORT:-""}" ]] && vpnportforward "$VPNPORT"
 [[ "${GROUPID:-""}" =~ ^[0-9]+$ ]] && groupmod -g $GROUPID -o vpn
 
@@ -246,8 +144,5 @@ elif ps -ef | egrep -v 'grep|openvpn.sh' | grep -q openvpn; then
 else
     mkdir -p /dev/net
     [[ -c /dev/net/tun ]] || mknod -m 0666 /dev/net/tun c 10 200
-    [[ -e $conf ]] || { echo "ERROR: VPN not configured!"; sleep 120; }
-    [[ -e $cert ]] || grep -q '<ca>' $conf ||
-        { echo "ERROR: VPN CA cert missing!"; sleep 120; }
     exec sg vpn -c "openvpn --cd $dir --config $conf"
 fi
