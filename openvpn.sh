@@ -129,13 +129,21 @@ while getopts ":hc:i:f:p:R:r:" opt; do
 done
 shift $(( OPTIND - 1 ))
 
+echo "1"
 [[ "${FIREWALL:-""}" || -e $route6 || -e $route ]] && [[ "${4:-""}" ]] && firewall $port
+echo "2"
 [[ "${FIREWALL:-""}" || -e $route ]] && firewall "${FIREWALL:-""}"
+echo "3"
 [[ "${ROUTE6:-""}" ]] && return_route6 "$ROUTE6"
+echo "4"
 [[ "${ROUTE:-""}" ]] && return_route "$ROUTE"
+echo "5"
 [[ "${VPN:-""}" ]] && eval vpn $(sed 's/^/"/; s/$/"/; s/;/" "/g' <<< $VPN)
+echo "6"
 [[ "${VPNPORT:-""}" ]] && vpnportforward "$VPNPORT"
+echo "7"
 [[ "${GROUPID:-""}" =~ ^[0-9]+$ ]] && groupmod -g $GROUPID -o vpn
+echo "8"
 
 if [[ $# -ge 1 && -x $(which $1 2>&-) ]]; then
     exec "$@"
