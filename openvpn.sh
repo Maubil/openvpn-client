@@ -85,8 +85,6 @@ vpnportforward() { local port="$1"
     echo "Setup forwarded port: $port"
 }
 
-vpn_config() { local conf="$1.ovpn" }
-
 ### usage: Help
 # Arguments:
 #   none)
@@ -118,7 +116,7 @@ route6="$dir/.firewall6"
 while getopts ":hc:i:f:p:R:r:" opt; do
     case "$opt" in
         h) usage ;;
-        i) vpn_config "$OPTARG" ;;
+        i) conf=${$OPTARG/.ovpn/}.ovpn ;;
         f) firewall "$OPTARG"; touch $route $route6 ;;
         p) vpnportforward "$OPTARG" ;;
         R) return_route6 "$OPTARG" ;;
@@ -129,21 +127,13 @@ while getopts ":hc:i:f:p:R:r:" opt; do
 done
 shift $(( OPTIND - 1 ))
 
-echo "1"
 [[ "${FIREWALL:-""}" || -e $route6 || -e $route ]] && [[ "${4:-""}" ]] && firewall $port
-echo "2"
 [[ "${FIREWALL:-""}" || -e $route ]] && firewall "${FIREWALL:-""}"
-echo "3"
 [[ "${ROUTE6:-""}" ]] && return_route6 "$ROUTE6"
-echo "4"
 [[ "${ROUTE:-""}" ]] && return_route "$ROUTE"
-echo "5"
 [[ "${VPN:-""}" ]] && eval vpn $(sed 's/^/"/; s/$/"/; s/;/" "/g' <<< $VPN)
-echo "6"
 [[ "${VPNPORT:-""}" ]] && vpnportforward "$VPNPORT"
-echo "7"
 [[ "${GROUPID:-""}" =~ ^[0-9]+$ ]] && groupmod -g $GROUPID -o vpn
-echo "8"
 
 if [[ $# -ge 1 && -x $(which $1 2>&-) ]]; then
     exec "$@"
