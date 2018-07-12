@@ -1,5 +1,11 @@
 [![logo](https://raw.githubusercontent.com/dperson/openvpn-client/master/logo.png)](https://openvpn.net/)
 
+# About this
+
+This is just a ~cheap~ rewrite of [url](https://github.com/dperson/openvpn-client).
+I did NOT update all of this readme and I can't guarantee that the following informations are completely accurate.
+Again, if you want the real deal, just use dperson's work.
+
 # OpenVPN
 
 This is an OpenVPN client docker container. It makes routing containers'
@@ -41,11 +47,13 @@ container) when you launch the service in it's container.
 
 ## Starting an OpenVPN client instance
 
-    sudo cp /path/to/vpn.crt /some/path/vpn-ca.crt
+    copy all vpn configs to /some/path, include all certificates and add a login.txt containing the user informations if required by VPN provider
+    don't forget to set auth-username login.txt in the corresponding vpn file.
+    then run:
+
     sudo docker run -it --cap-add=NET_ADMIN --device /dev/net/tun --name vpn \
                 -v /some/path:/vpn -d dperson/openvpn-client \
-                -v 'vpn.server.name;username;password'
-    sudo docker restart vpn
+                -i Config.ovpn
 
 Once it's up other containers can be started using it's network connection:
 
@@ -102,28 +110,22 @@ the second container (that's what `--net=container:vpn` does).
 
     Usage: openvpn.sh [-opt] [command]
     Options (fields in '[]' are optional, '<>' are required):
-        -h          This help
-        -c '<passwd>' Configure an authentication password to open the cert
-                    required arg: '<passwd>'
-                    <passwd> password to access the certificate file
-        -d          Use the VPN provider's DNS resolvers
-        -f '[port]' Firewall rules so that only the VPN and DNS are allowed to
-                    send internet traffic (IE if VPN is down it's offline)
-                    optional arg: [port] to use, instead of default
-        -p '<port>' Forward port <port>
-                    required arg: '<port>'
-        -R '<network>' CIDR IPv6 network (IE fe00:d34d:b33f::/64)
-                    required arg: '<network>'
-                    <network> add a route to (allows replies once the VPN is up)
-        -r '<network>' CIDR network (IE 192.168.1.0/24)
-                    required arg: '<network>'
-                    <network> add a route to (allows replies once the VPN is up)
-        -v '<server;user;password[;port]>' Configure OpenVPN
-                    required arg: '<server>;<user>;<password>'
-                    <server> to connect to (multiple servers are separated by :)
-                    <user> to authenticate as
-                    <password> to authenticate with
-                    optional arg: [port] to use, instead of default
+        -h              This help
+        -i '<config>'   Openvpn config file to start
+        -f '[port]'     Firewall rules so that only the VPN and DNS are allowed to
+                        send internet traffic (IE if VPN is down it's offline)
+                        optional arg: [port] to use, instead of default
+        -p '<port>'     Forward port <port>
+                        required arg: '<port>'
+        -s '<provider>' Request port forwarding on the server, requires -p to be set.
+                        Currently implemented:
+                            - PIA
+        -R '<network>'  CIDR IPv6 network (IE fe00:d34d:b33f::/64)
+                        required arg: '<network>'
+                        <network> add a route to (allows replies once the VPN is up)
+        -r '<network>'  CIDR network (IE 192.168.1.0/24)
+                        required arg: '<network>'
+                        <network> add a route to (allows replies once the VPN is up)
 
     The 'command' (if provided and valid) will be run instead of openvpn
 

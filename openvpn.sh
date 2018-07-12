@@ -92,18 +92,22 @@ vpnportforward() { local port="$1"
 usage() { local RC="${1:-0}"
     echo "Usage: ${0##*/} [-opt] [command]
 Options (fields in '[]' are optional, '<>' are required):
-    -h          This help
-    -f '[port]' Firewall rules so that only the VPN and DNS are allowed to
-                send internet traffic (IE if VPN is down it's offline)
-                optional arg: [port] to use, instead of default
-    -p '<port>' Forward port <port>
-                  required arg: '<port>'
-    -R '<network>' CIDR IPv6 network (IE fe00:d34d:b33f::/64)
-                required arg: '<network>'
-                <network> add a route to (allows replies once the VPN is up)
-    -r '<network>' CIDR network (IE 192.168.1.0/24)
-                required arg: '<network>'
-                <network> add a route to (allows replies once the VPN is up)
+    -h              This help
+    -i '<config>'   Openvpn config file to start
+    -f '[port]'     Firewall rules so that only the VPN and DNS are allowed to
+                    send internet traffic (IE if VPN is down it's offline)
+                    optional arg: [port] to use, instead of default
+    -p '<port>'     Forward port <port>
+                    required arg: '<port>'
+    -s '<provider>' Request port forwarding on the server, requires -p to be set.
+                    Currently implemented:
+                        - PIA
+    -R '<network>'  CIDR IPv6 network (IE fe00:d34d:b33f::/64)
+                    required arg: '<network>'
+                    <network> add a route to (allows replies once the VPN is up)
+    -r '<network>'  CIDR network (IE 192.168.1.0/24)
+                    required arg: '<network>'
+                    <network> add a route to (allows replies once the VPN is up)
 
 The 'command' (if provided and valid) will be run instead of openvpn" >&2
     exit $RC
@@ -116,7 +120,7 @@ route6="$dir/.firewall6"
 while getopts ":hc:i:f:p:R:r:" opt; do
     case "$opt" in
         h) usage ;;
-        i) conf=${$OPTARG/.ovpn/}.ovpn ;;
+        i) conf=${OPTARG/.ovpn/}.ovpn ;;
         f) firewall "$OPTARG"; touch $route $route6 ;;
         p) vpnportforward "$OPTARG" ;;
         R) return_route6 "$OPTARG" ;;
