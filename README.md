@@ -1,10 +1,9 @@
-[![logo](https://raw.githubusercontent.com/dperson/openvpn-client/master/logo.png)](https://openvpn.net/)
-
 # About this
 
-This is just a ~cheap~ rewrite of [url](https://github.com/dperson/openvpn-client).
-I did NOT update all of this readme and I can't guarantee that the following informations are completely accurate.
-Again, if you want the real deal, just use dperson's work.
+This is just a cheap rewrite of https://github.com/dperson/openvpn-client.
+I did NOT update all of this readme and I can't guarantee that the following 
+informations are completely accurate. Again, if you want the real deal, just 
+use dperson's work.
 
 # OpenVPN
 
