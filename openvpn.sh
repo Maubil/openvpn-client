@@ -75,14 +75,46 @@ return_route() { local network="$1" gw="$(ip route | awk '/default/ {print $3}')
     [[ -e $route ]] && grep -q "^$network\$" $route || echo "$network" >>$route
 }
 
+### return_route: get a forwarded port from PIA
+# Arguments:
+#   login) text file containing username and password for PIA
+# Return: forwarded port
+pia() { local username=$(sed -n '1p' $1) password=$(sed -n '2p' $1)
+    vpn_local_ip=$(ifconfig tun0 | awk '/inet / {print $2}' | awk 'BEGIN { FS = ":" } {print $(NF)}')
+    client_id=$(uname -v | sha1sum | awk '{ print $1 }')
+
+    # request new port
+    json_reply=$(curl -m 5 --silent --interface tun0 'https://www.privateinternetaccess.com/vpninfo/port_forward_assignment' \
+    -d "user=$username&pass=$password&client_id=$client_id&local_ip=$vpn_local_ip" | head -1)
+    # trim VPN forwarded port from JSON
+    forwarded_port=$(echo $json_reply | awk 'BEGIN{r=1;FS="{|:|}"} /port/{r=0; print $3} END{exit r}')
+    echo $forwarded_port  
+}
+
 ### vpnportforward: setup vpn port forwarding
 # Arguments:
 #   port) forwarded port
 # Return: configured NAT rule
-vpnportforward() { local port="$1"
-    ip6tables -t nat -A OUTPUT -p tcp --dport $port -j DNAT --to-destination ::11:$port 2>/dev/null
-    iptables  -t nat -A OUTPUT -p tcp --dport $port -j DNAT --to-destination 127.0.0.11:$port
-    echo "Setup forwarded port: $port"
+vpnportforward() { local in_port="$1" local out_port="$2"
+    ip6tables -t nat -A OUTPUT -p tcp --dport $in_port -j DNAT --to-destination ::11:$out_port 2>/dev/null
+    iptables  -t nat -A OUTPUT -p tcp --dport $in_port -j DNAT --to-destination 127.0.0.11:$out_port
+    echo "Setup forwarded port: $in_port->$out_port"
+}
+
+### post_vpn_up: commands to be run after vpn started up
+# Arguments:
+#   vpn_provider) vpn provider to use
+#   port) forward port to be used
+# Return: nothing
+post_vpn_up() { local vpn_provider="${1:-""}" local local_port="${1:-0}"
+    case $vpn_provider in
+        pia)
+            vpnportforward "${pia}" "$local_port"
+            ;;
+        *)
+            vpnportforward "$local_port" "$local_port"
+            ;;
+    esac        
 }
 
 ### usage: Help
