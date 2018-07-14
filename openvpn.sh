@@ -75,7 +75,7 @@ return_route() { local network="$1" gw="$(ip route | awk '/default/ {print $3}')
     [[ -e $route ]] && grep -q "^$network\$" $route || echo "$network" >>$route
 }
 
-### return_route: get a forwarded port from PIA
+### pia: get a forwarded port from PIA
 # Arguments:
 #   login) text file containing username and password for PIA
 # Return: forwarded port
@@ -93,12 +93,13 @@ pia() { local username=$(sed -n '1p' $1) password=$(sed -n '2p' $1)
 
 ### vpnportforward: setup vpn port forwarding
 # Arguments:
-#   port) forwarded port
+#   in_port) input port
+#   dest_port) destination port
 # Return: configured NAT rule
-vpnportforward() { local in_port="$1" local out_port="$2"
-    ip6tables -t nat -A OUTPUT -p tcp --dport $in_port -j DNAT --to-destination ::11:$out_port 2>/dev/null
-    iptables  -t nat -A OUTPUT -p tcp --dport $in_port -j DNAT --to-destination 127.0.0.11:$out_port
-    echo "Setup forwarded port: $in_port->$out_port"
+vpnportforward() { local in_port="$1" dest_port="$2"
+    ip6tables -t nat -A OUTPUT -p tcp --dport $in_port -j DNAT --to-destination ::11:$dest_port 2>/dev/null
+    iptables  -t nat -A OUTPUT -p tcp --dport $in_port -j DNAT --to-destination 127.0.0.11:$dest_port
+    echo "Setup forwarded port: $in_port->$dest_port"
 }
 
 ### post_vpn_up: commands to be run after vpn started up
@@ -106,10 +107,12 @@ vpnportforward() { local in_port="$1" local out_port="$2"
 #   vpn_provider) vpn provider to use
 #   port) forward port to be used
 # Return: nothing
-post_vpn_up() { local vpn_provider="${1:-""}" local local_port="${1:-0}"
+post_vpn_up() { local vpn_provider="${2:-""}" local_port="${1:-0}"
+    sleep 20    # Very lazy solution... Assumes VPN is up after 20 secs
     case $vpn_provider in
         pia)
-            vpnportforward "${pia}" "$local_port"
+            # Use /vpn/login.txt to retrieve pia credentials
+            vpnportforward "$(pia '/vpn/login.txt')" "$local_port" # Lazy solution will do for now
             ;;
         *)
             vpnportforward "$local_port" "$local_port"
@@ -148,13 +151,16 @@ The 'command' (if provided and valid) will be run instead of openvpn" >&2
 dir="/vpn"
 route="$dir/.firewall"
 route6="$dir/.firewall6"
+requested_forward_port=""
+vpn_provider_name="none"
 
 while getopts ":hc:i:f:p:R:r:" opt; do
     case "$opt" in
         h) usage ;;
         i) conf=${OPTARG/.ovpn/}.ovpn ;;
         f) firewall "$OPTARG"; touch $route $route6 ;;
-        p) vpnportforward "$OPTARG" ;;
+        p) requested_forward_port="$OPTARG" ;;
+        s) vpn_provider_name="$OPTARG" ;;
         R) return_route6 "$OPTARG" ;;
         r) return_route "$OPTARG" ;;
         "?") echo "Unknown option: -$OPTARG"; usage 1 ;;
@@ -168,7 +174,6 @@ shift $(( OPTIND - 1 ))
 [[ "${ROUTE6:-""}" ]] && return_route6 "$ROUTE6"
 [[ "${ROUTE:-""}" ]] && return_route "$ROUTE"
 [[ "${VPN:-""}" ]] && eval vpn $(sed 's/^/"/; s/$/"/; s/;/" "/g' <<< $VPN)
-[[ "${VPNPORT:-""}" ]] && vpnportforward "$VPNPORT"
 [[ "${GROUPID:-""}" =~ ^[0-9]+$ ]] && groupmod -g $GROUPID -o vpn
 
 if [[ $# -ge 1 && -x $(which $1 2>&-) ]]; then
@@ -179,6 +184,7 @@ elif [[ $# -ge 1 ]]; then
 elif ps -ef | egrep -v 'grep|openvpn.sh' | grep -q openvpn; then
     echo "Service already running, please restart container to apply changes"
 else
+    [[ "${requested_forward_port:-""}" ]] && post_vpn_up "$requested_forward_port" "$vpn_provider_name" & # child will let us 30 seconds to connect to VPN before setting up port forwarding
     mkdir -p /dev/net
     [[ -c /dev/net/tun ]] || mknod -m 0666 /dev/net/tun c 10 200
     exec sg vpn -c "openvpn --cd $dir --config $conf"
