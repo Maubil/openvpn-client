@@ -154,7 +154,7 @@ route6="$dir/.firewall6"
 requested_forward_port=""
 vpn_provider_name="none"
 
-while getopts ":hc:i:f:p:R:r:" opt; do
+while getopts ":hc:i:f:p:s:R:r:" opt; do
     case "$opt" in
         h) usage ;;
         i) conf=${OPTARG/.ovpn/}.ovpn ;;
