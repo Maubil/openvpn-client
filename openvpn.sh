@@ -79,13 +79,13 @@ return_route() { local network="$1" gw="$(ip route | awk '/default/ {print $3}')
 # Arguments:
 #   login) text file containing username and password for PIA
 # Return: forwarded port
-pia() { local username=$(sed -n '1p' $1) password=$(sed -n '2p' $1)
-    vpn_local_ip=$(ifconfig tun0 | awk '/inet / {print $2}' | awk 'BEGIN { FS = ":" } {print $(NF)}')
-    client_id=$(uname -v | sha1sum | awk '{ print $1 }')
+pia() { local username=$(sed -n '1p' $1) password=$(sed -n '2p' $1) \
+    local_ip=`ip addr show tun0|grep -oE "inet *10\.[0-9]+\.[0-9]+\.[0-9]+"|tr -d "a-z "` \
+	client_id=`head -n 100 /dev/urandom | md5sum | tr -d " -"`
 
     # request new port
     json_reply=$(curl -m 5 --silent --interface tun0 'https://www.privateinternetaccess.com/vpninfo/port_forward_assignment' \
-    -d "user=$username&pass=$password&client_id=$client_id&local_ip=$vpn_local_ip" | head -1)
+    -d "user=$username&pass=$password&client_id=$client_id&local_ip=$local_ip" | head -1)
     # trim VPN forwarded port from JSON
     forwarded_port=$(echo $json_reply | awk 'BEGIN{r=1;FS="{|:|}"} /port/{r=0; print $3} END{exit r}')
     echo $forwarded_port  
