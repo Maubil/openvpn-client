@@ -86,9 +86,8 @@ pia() { local username=$(sed -n '1p' $1) password=$(sed -n '2p' $1) \
     # request new port
     json_reply=$(curl -m 5 --silent --interface tun0 'https://www.privateinternetaccess.com/vpninfo/port_forward_assignment' \
     -d "user=$username&pass=$password&client_id=$client_id&local_ip=$local_ip" | head -1)
-    # trim VPN forwarded port from JSON
-    forwarded_port=$(echo $json_reply | awk 'BEGIN{r=1;FS="{|:|}"} /port/{r=0; print $3} END{exit r}')
-    echo $forwarded_port  
+    # echo only the port
+    echo $json_reply | grep -o '[0-9]*'
 }
 
 ### vpnportforward: setup vpn port forwarding
